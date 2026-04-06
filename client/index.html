@@ -1,0 +1,97 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <title>Fighter Arena</title>
+  <link rel="stylesheet" href="style.css" />
+</head>
+<body>
+<div id="app">
+
+  <!-- ── QUEUE / MENU SCREEN ─────────────────────────────── -->
+  <div id="queue-screen" class="screen">
+
+    <!-- Title -->
+    <div class="title-block">
+      <div class="title-text">FIGHTER</div>
+      <div class="title-sub">ARENA</div>
+    </div>
+
+    <!-- Showcase row: Alice | Battle Preview | Bob -->
+    <div class="showcase">
+
+      <!-- Alice card -->
+      <div class="char-card" id="alice-card">
+        <div class="player-badge p1">P1</div>
+        <canvas id="alice-canvas" width="130" height="180"></canvas>
+        <div class="char-name" style="color:#FF69B4">ALICE</div>
+        <div class="char-stats">
+          <div class="stat-row"><span class="stat-label">SPD</span><span class="stars">★★★★☆</span></div>
+          <div class="stat-row"><span class="stat-label">PWR</span><span class="stars">★★★☆☆</span></div>
+          <div class="stat-row"><span class="stat-label">DEF</span><span class="stars">★★★★☆</span></div>
+        </div>
+      </div>
+
+      <!-- Battle preview -->
+      <div class="preview-area">
+        <div class="preview-label">⚔ BATTLE PREVIEW ⚔</div>
+        <div class="preview-frame">
+          <canvas id="preview-canvas" width="420" height="190"></canvas>
+        </div>
+      </div>
+
+      <!-- Bob card -->
+      <div class="char-card" id="bob-card">
+        <div class="player-badge p2">P2</div>
+        <canvas id="bob-canvas" width="130" height="180"></canvas>
+        <div class="char-name" style="color:#FF8C00">BOB</div>
+        <div class="char-stats">
+          <div class="stat-row"><span class="stat-label">SPD</span><span class="stars">★★★☆☆</span></div>
+          <div class="stat-row"><span class="stat-label">PWR</span><span class="stars">★★★★☆</span></div>
+          <div class="stat-row"><span class="stat-label">DEF</span><span class="stars">★★★☆☆</span></div>
+        </div>
+      </div>
+
+    </div><!-- /showcase -->
+
+    <!-- Join form (shown by default) -->
+    <div id="name-form">
+      <input id="name-input" type="text" placeholder="Enter your name" maxlength="16" autocomplete="off" />
+      <div class="btn-row">
+        <button id="join-btn">JOIN QUEUE</button>
+        <button id="share-btn">SHARE LINK</button>
+      </div>
+    </div>
+
+    <!-- Waiting status (shown after joining) -->
+    <div id="queue-status" class="hidden">
+      <div class="spinner"></div>
+      <p id="queue-msg">Waiting for opponent…</p>
+      <button id="cancel-btn">Cancel</button>
+    </div>
+
+    <div class="controls-hint">
+      ← → Move &nbsp;|&nbsp; ↑ Jump &nbsp;|&nbsp;
+      A Fist &nbsp;|&nbsp; S Leg &nbsp;|&nbsp; D Uppercut &nbsp;|&nbsp;
+      F Block &nbsp;|&nbsp; G Dodge
+    </div>
+  </div>
+
+  <!-- ── GAME SCREEN ─────────────────────────────────────── -->
+  <div id="game-screen" class="screen hidden">
+    <canvas id="game-canvas" width="800" height="450"></canvas>
+    <div class="controls-hint small">
+      ← → Move &nbsp;|&nbsp; ↑ Jump &nbsp;|&nbsp;
+      A Fist &nbsp;|&nbsp; S Leg &nbsp;|&nbsp; D Uppercut &nbsp;|&nbsp;
+      F Block &nbsp;|&nbsp; G Dodge
+    </div>
+  </div>
+
+  <!-- Toast notification -->
+  <div id="toast"></div>
+
+</div><!-- /app -->
+<script src="game.js"></script>
+</body>
+</html>

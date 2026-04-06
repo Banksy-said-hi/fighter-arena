@@ -1,0 +1,21 @@
+# Go binaries
+server/fighter-game-server
+*.exe
+*.test
+*.out
+
+# macOS
+.DS_Store
+.AppleDouble
+
+# IDE
+.idea/
+.vscode/
+*.swp
+
+# Fly.io
+.fly/
+
+# Env / secrets
+.env
+*.env.local
