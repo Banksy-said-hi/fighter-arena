@@ -564,6 +564,13 @@ func (m *Match) broadcast(msg interface{}) {
 func (m *Match) PlayerLeft(p *Player) {
 	for _, other := range m.players {
 		if other != p {
+			// Disconnecting mid-match counts as a loss — record the win
+			// for the remaining player only if the match was actually underway.
+			if m.phase == PhaseFighting || m.phase == PhaseCountdown {
+				m.winner = other.Name
+				m.phase = PhaseGameOver
+				GlobalLeaderboard.RecordWin(other.Name)
+			}
 			other.Send(map[string]interface{}{
 				"type":    "opponent_left",
 				"message": "Opponent disconnected — You Win!",
