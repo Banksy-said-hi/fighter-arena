@@ -298,6 +298,80 @@ body {
 }
 #cancel-btn:hover { color: #fff; border-color: #fff; }
 
+/* ── Leaderboard ──────────────────────────────────────────── */
+#leaderboard-wrap {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  gap: 8px;
+  width: 700px;
+}
+
+.lb-title {
+  font-size: 0.78rem;
+  font-weight: 700;
+  letter-spacing: 4px;
+  color: #FFD700;
+  text-shadow: 0 0 10px rgba(255, 215, 0, 0.5);
+}
+
+#leaderboard-table {
+  width: 100%;
+  border-collapse: collapse;
+  font-family: 'Courier New', monospace;
+  font-size: 0.82rem;
+}
+
+#leaderboard-table thead tr {
+  background: rgba(255, 255, 255, 0.05);
+  border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+#leaderboard-table th {
+  padding: 6px 14px;
+  color: rgba(255, 255, 255, 0.35);
+  font-weight: 700;
+  letter-spacing: 2px;
+  font-size: 0.68rem;
+  text-transform: uppercase;
+  text-align: left;
+}
+
+#leaderboard-table th:last-child { text-align: right; }
+
+#leaderboard-table td {
+  padding: 7px 14px;
+  border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+  color: rgba(255, 255, 255, 0.75);
+}
+
+#leaderboard-table td:last-child { text-align: right; }
+
+#leaderboard-table tbody tr {
+  transition: background 0.15s;
+}
+
+#leaderboard-table tbody tr:hover {
+  background: rgba(255, 255, 255, 0.04);
+}
+
+/* Rank medals */
+.lb-rank-1 { color: #FFD700 !important; font-weight: 900; }
+.lb-rank-2 { color: #C0C0C0 !important; font-weight: 700; }
+.lb-rank-3 { color: #CD7F32 !important; font-weight: 700; }
+
+.lb-wins {
+  font-weight: 700;
+  color: #FF8C00;
+}
+
+.lb-empty {
+  text-align: center !important;
+  color: rgba(255,255,255,0.2) !important;
+  padding: 12px !important;
+  font-style: italic;
+}
+
 /* ── Game canvas ──────────────────────────────────────────── */
 #game-canvas {
   display: block;

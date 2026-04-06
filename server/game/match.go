@@ -169,6 +169,7 @@ func (m *Match) Run() {
 				m.update()
 				if m.winner != "" {
 					m.phase = PhaseGameOver
+					GlobalLeaderboard.RecordWin(m.winner)
 				}
 
 			case PhaseGameOver:

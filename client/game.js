@@ -212,6 +212,7 @@ function showQueueScreen() {
   queueStatus.classList.add('hidden');
   phase = 'menu';
   startMenuAnimation();
+  fetchLeaderboard();
 }
 
 function showGameScreen() {
@@ -893,6 +894,41 @@ function hexAlpha(hex, a) {
   const [r, g, b] = hexToRgb(hex);
   return `rgba(${r},${g},${b},${a})`;
 }
+
+// ── Leaderboard ───────────────────────────────────────────────────────────────
+const RANK_MEDALS = ['🥇', '🥈', '🥉', '4', '5'];
+
+async function fetchLeaderboard() {
+  try {
+    const res = await fetch('/leaderboard');
+    const data = await res.json();
+    renderLeaderboard(data);
+  } catch (_) {}
+}
+
+function renderLeaderboard(entries) {
+  const tbody = document.getElementById('leaderboard-body');
+  if (!entries || entries.length === 0) {
+    tbody.innerHTML = '<tr><td colspan="3" class="lb-empty">No matches played yet</td></tr>';
+    return;
+  }
+
+  tbody.innerHTML = entries.map(e => `
+    <tr>
+      <td class="lb-rank-${e.rank}">${RANK_MEDALS[e.rank - 1]}</td>
+      <td class="lb-rank-${e.rank}">${e.name}</td>
+      <td class="lb-wins">${e.wins} W</td>
+    </tr>
+  `).join('');
+}
+
+// Fetch on load and refresh every 10s while on menu
+fetchLeaderboard();
+setInterval(() => { if (phase === 'menu') fetchLeaderboard(); }, 10_000);
+
+// Also refresh when returning to menu after a match
+const _origShowQueue = showQueueScreen;
+// patched inline below — we call fetchLeaderboard in showQueueScreen directly
 
 // ── Boot ──────────────────────────────────────────────────────────────────────
 startMenuAnimation();
