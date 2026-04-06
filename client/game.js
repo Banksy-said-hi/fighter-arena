@@ -36,13 +36,19 @@ const keyMap = {
   g: 'dodge',  G: 'dodge',
 };
 
+function sendInputNow() {
+  if (ws && ws.readyState === WebSocket.OPEN && phase === 'game') {
+    ws.send(JSON.stringify({ type: 'input', keys }));
+  }
+}
+
 document.addEventListener('keydown', e => {
   const a = keyMap[e.key];
-  if (a) { e.preventDefault(); keys[a] = true; }
+  if (a) { e.preventDefault(); if (!keys[a]) { keys[a] = true; sendInputNow(); } }
 });
 document.addEventListener('keyup', e => {
   const a = keyMap[e.key];
-  if (a) { keys[a] = false; }
+  if (a) { keys[a] = false; sendInputNow(); }
 });
 
 // ── Audio ─────────────────────────────────────────────────────────────────────
@@ -86,6 +92,69 @@ function playSound(name) {
       );
       break;
     case 'jump':      beep({ type: 'sine', freq: 300, endFreq: 500, duration: 0.12, volume: 0.15 }); break;
+  }
+}
+
+// ── Client-side prediction ────────────────────────────────────────────────────
+// Mirrors server physics so local player movement feels instant regardless of ping.
+// Server remains authoritative for combat, damage and opponent position.
+
+const PRED = {
+  gravity:   0.65,
+  jumpVel:  -13.5,
+  moveSpeed: 5.0,
+  maxFall:   18.0,
+};
+
+let pred = null; // { x, y, vx, vy }
+
+// States where we trust the server completely (combat / reactions)
+const SERVER_ONLY_STATES = new Set([
+  'attack_fist', 'attack_leg', 'attack_uppercut',
+  'blocking', 'dodging', 'hurt', 'ko',
+]);
+
+function initPred(sp) {
+  pred = { x: sp.x, y: sp.y, vx: 0, vy: 0 };
+}
+
+function stepPred() {
+  if (!pred || playerID === null || !gameState || gameState.phase !== 'fighting') return;
+  const sp = gameState.players && gameState.players[playerID];
+  if (!sp || SERVER_ONLY_STATES.has(sp.state)) return; // let server drive
+
+  const onGround = pred.y >= GROUND_Y - PLAYER_H - 1;
+
+  if (keys.left)       pred.vx = -PRED.moveSpeed;
+  else if (keys.right) pred.vx =  PRED.moveSpeed;
+  else { pred.vx *= 0.65; if (Math.abs(pred.vx) < 0.3) pred.vx = 0; }
+
+  if (keys.jump && onGround) pred.vy = PRED.jumpVel;
+
+  pred.vy += PRED.gravity;
+  if (pred.vy > PRED.maxFall) pred.vy = PRED.maxFall;
+
+  pred.x += pred.vx;
+  pred.y += pred.vy;
+
+  if (pred.y >= GROUND_Y - PLAYER_H) { pred.y = GROUND_Y - PLAYER_H; pred.vy = 0; }
+  if (pred.x < 0)           { pred.x = 0;           pred.vx = 0; }
+  if (pred.x > W - PLAYER_W){ pred.x = W - PLAYER_W; pred.vx = 0; }
+}
+
+function reconcilePred(sp) {
+  if (!pred) { initPred(sp); return; }
+  const dx = sp.x - pred.x;
+  const dy = sp.y - pred.y;
+  // Small drift → gentle lerp.  Large drift → snap.
+  if (Math.abs(dx) < 80 && Math.abs(dy) < 80) {
+    pred.x += dx * 0.12;
+    pred.y += dy * 0.12;
+  } else {
+    pred.x = sp.x;
+    pred.y = sp.y;
+    pred.vx = 0;
+    pred.vy = 0;
   }
 }
 
@@ -203,6 +272,10 @@ function handleMsg(msg) {
     case 'state': {
       const prev = gameState;
       gameState  = msg.state;
+      // Reconcile local prediction with authoritative server position
+      if (playerID !== null && gameState.players && gameState.players[playerID]) {
+        reconcilePred(gameState.players[playerID]);
+      }
       if (prev) detectSoundEvents(prev, gameState);
       if (gameState.phase === 'countdown' && gameState.countdown !== prevCountdown) {
         if (gameState.countdown > 0) playSound('countdown');
@@ -591,6 +664,7 @@ function gameRenderLoop() {
 }
 
 function renderGame() {
+  stepPred(); // advance local prediction every animation frame (~60fps)
   ctx.clearRect(0, 0, W, H);
 
   if (!gameState) { drawLoading(); return; }
@@ -651,8 +725,15 @@ function drawGround() {
 
 // ── Full-size game player (delegates to drawSprite) ───────────────────────────
 function drawGamePlayer(p) {
-  const x = Math.round(p.x);
-  const y = Math.round(p.y);
+  // Use predicted position for local player during free movement
+  let x, y;
+  if (p.id === playerID && pred && !SERVER_ONLY_STATES.has(p.state)) {
+    x = Math.round(pred.x);
+    y = Math.round(pred.y);
+  } else {
+    x = Math.round(p.x);
+    y = Math.round(p.y);
+  }
 
   ctx.save();
   if (hitFlash[p.id] > 0) ctx.globalAlpha = hitFlash[p.id] % 2 === 0 ? 0.3 : 1.0;
