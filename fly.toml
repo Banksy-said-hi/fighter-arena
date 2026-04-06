@@ -19,3 +19,10 @@ primary_region = "ams"
   cpu_kind  = "shared"
   cpus      = 1
   memory_mb = 256
+
+[env]
+  DB_PATH = "/data/fighter.db"
+
+[[mounts]]
+  source      = "fighter_data"
+  destination = "/data"

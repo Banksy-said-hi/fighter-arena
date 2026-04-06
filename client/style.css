@@ -298,14 +298,21 @@ body {
 }
 #cancel-btn:hover { color: #fff; border-color: #fff; }
 
-/* ── Leaderboard ──────────────────────────────────────────── */
-#leaderboard-wrap {
+/* ── Tables row ───────────────────────────────────────────── */
+#tables-row {
   display: flex;
-  flex-direction: column;
-  align-items: center;
-  gap: 8px;
+  gap: 14px;
   width: 700px;
 }
+
+.table-panel {
+  flex: 1;
+  display: flex;
+  flex-direction: column;
+  gap: 8px;
+}
+
+/* ── Leaderboard ──────────────────────────────────────────── */
 
 .lb-title {
   font-size: 0.78rem;
@@ -370,6 +377,39 @@ body {
   color: rgba(255,255,255,0.2) !important;
   padding: 12px !important;
   font-style: italic;
+}
+
+/* ── Queue table ──────────────────────────────────────────── */
+#leaderboard-table,
+#queue-table {
+  width: 100%;
+}
+
+.queue-waiting td { color: #FFD700 !important; }
+.queue-fighting td { color: #FF69B4 !important; }
+
+.queue-dot {
+  display: inline-block;
+  width: 7px; height: 7px;
+  border-radius: 50%;
+  margin-right: 5px;
+  animation: dotPulse 1.2s ease-in-out infinite;
+}
+.dot-waiting  { background: #FFD700; }
+.dot-fighting { background: #FF69B4; }
+
+@keyframes dotPulse {
+  0%, 100% { opacity: 1; transform: scale(1); }
+  50%       { opacity: 0.5; transform: scale(0.7); }
+}
+
+#server-stats {
+  font-size: 0.68rem;
+  color: rgba(255,255,255,0.25);
+  text-align: center;
+  padding-top: 4px;
+  font-family: 'Courier New', monospace;
+  letter-spacing: 1px;
 }
 
 /* ── Game canvas ──────────────────────────────────────────── */

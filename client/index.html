@@ -71,21 +71,30 @@
       <button id="cancel-btn">Cancel</button>
     </div>
 
-    <!-- Leaderboard -->
-    <div id="leaderboard-wrap">
-      <div class="lb-title">🏆 TOP FIGHTERS</div>
-      <table id="leaderboard-table">
-        <thead>
-          <tr>
-            <th>#</th>
-            <th>Player</th>
-            <th>Wins</th>
-          </tr>
-        </thead>
-        <tbody id="leaderboard-body">
-          <tr><td colspan="3" class="lb-empty">No matches played yet</td></tr>
-        </tbody>
-      </table>
+    <!-- Leaderboard + Queue side by side -->
+    <div id="tables-row">
+
+      <div class="table-panel">
+        <div class="lb-title">🏆 TOP FIGHTERS</div>
+        <table id="leaderboard-table">
+          <thead><tr><th>#</th><th>Player</th><th>Wins</th></tr></thead>
+          <tbody id="leaderboard-body">
+            <tr><td colspan="3" class="lb-empty">No matches played yet</td></tr>
+          </tbody>
+        </table>
+      </div>
+
+      <div class="table-panel">
+        <div class="lb-title">⚡ LIVE STATUS</div>
+        <table id="queue-table">
+          <thead><tr><th>Status</th><th>Player</th><th>Time</th></tr></thead>
+          <tbody id="queue-body">
+            <tr><td colspan="3" class="lb-empty">Loading...</td></tr>
+          </tbody>
+        </table>
+        <div id="server-stats"></div>
+      </div>
+
     </div>
 
     <div class="controls-hint">

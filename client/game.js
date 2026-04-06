@@ -213,6 +213,7 @@ function showQueueScreen() {
   phase = 'menu';
   startMenuAnimation();
   fetchLeaderboard();
+  fetchQueue();
 }
 
 function showGameScreen() {
@@ -922,9 +923,56 @@ function renderLeaderboard(entries) {
   `).join('');
 }
 
+// ── Queue status ──────────────────────────────────────────────────────────────
+async function fetchQueue() {
+  try {
+    const res = await fetch('/queue');
+    const data = await res.json();
+    renderQueue(data);
+  } catch (_) {}
+}
+
+function renderQueue(q) {
+  const tbody = document.getElementById('queue-body');
+  const stats = document.getElementById('server-stats');
+
+  if (!q) return;
+
+  let rows = '';
+
+  if (q.active_matches > 0) {
+    rows += `<tr class="queue-fighting">
+      <td><span class="queue-dot dot-fighting"></span>Fighting</td>
+      <td>${q.active_matches} match${q.active_matches !== 1 ? 'es' : ''}</td>
+      <td>live</td>
+    </tr>`;
+  }
+
+  if (q.waiting_name) {
+    const s = q.waiting_secs;
+    const timeStr = s < 60 ? `${s}s` : `${Math.floor(s/60)}m ${s%60}s`;
+    rows += `<tr class="queue-waiting">
+      <td><span class="queue-dot dot-waiting"></span>Waiting</td>
+      <td>${q.waiting_name}</td>
+      <td>${timeStr}</td>
+    </tr>`;
+  }
+
+  if (!rows) {
+    rows = '<tr><td colspan="3" class="lb-empty">Queue is empty</td></tr>';
+  }
+
+  tbody.innerHTML = rows;
+  stats.textContent = `${q.online} player${q.online !== 1 ? 's' : ''} online`;
+}
+
 // Fetch on load and refresh every 10s while on menu
 fetchLeaderboard();
 setInterval(() => { if (phase === 'menu') fetchLeaderboard(); }, 10_000);
+
+// Queue refreshes every 3s (it's real-time)
+fetchQueue();
+setInterval(() => { if (phase === 'menu') fetchQueue(); }, 3_000);
 
 // Also refresh when returning to menu after a match
 const _origShowQueue = showQueueScreen;
