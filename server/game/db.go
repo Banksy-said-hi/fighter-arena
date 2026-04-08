@@ -35,6 +35,27 @@ func InitDB(path string) error {
 			matched_at  DATETIME,
 			left_at     DATETIME
 		);
+
+		CREATE TABLE IF NOT EXISTS users (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			google_id  TEXT    NOT NULL UNIQUE,
+			email      TEXT    NOT NULL,
+			nickname   TEXT    UNIQUE,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP,
+			last_seen  DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+
+		CREATE TABLE IF NOT EXISTS events (
+			id         INTEGER PRIMARY KEY AUTOINCREMENT,
+			user_id    INTEGER,
+			session_id TEXT    NOT NULL,
+			event      TEXT    NOT NULL,
+			meta       TEXT,
+			created_at DATETIME DEFAULT CURRENT_TIMESTAMP
+		);
+		CREATE INDEX IF NOT EXISTS idx_events_user    ON events(user_id);
+		CREATE INDEX IF NOT EXISTS idx_events_event   ON events(event);
+		CREATE INDEX IF NOT EXISTS idx_events_created ON events(created_at);
 	`); err != nil {
 		return err
 	}

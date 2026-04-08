@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"log"
 	"sync"
+	"sync/atomic"
 	"time"
 
 	"github.com/gorilla/websocket"
@@ -25,17 +26,20 @@ type Keys struct {
 	Uppercut bool `json:"uppercut"`
 	Block    bool `json:"block"`
 	Dodge    bool `json:"dodge"`
+	Shoot    bool `json:"shoot"`
 }
 
 type Player struct {
-	hub   *Hub
-	conn  *websocket.Conn
-	send  chan []byte
-	mu    sync.Mutex
-	ID    int
-	Name  string
-	Keys  Keys
-	Match *Match
+	hub      *Hub
+	conn     *websocket.Conn
+	send     chan []byte
+	closed   atomic.Bool // set to true when hub closes the send channel
+	mu       sync.Mutex
+	ID       int
+	Name     string
+	Keys     Keys
+	Match    *Match
+	authedAs string // non-empty when name came from a verified JWT
 }
 
 type IncomingMsg struct {
@@ -55,6 +59,13 @@ func NewPlayer(hub *Hub, conn *websocket.Conn) *Player {
 func (p *Player) Send(msg interface{}) {
 	data, err := json.Marshal(msg)
 	if err != nil {
+		return
+	}
+	p.SendBytes(data)
+}
+
+func (p *Player) SendBytes(data []byte) {
+	if p.closed.Load() {
 		return
 	}
 	select {
@@ -92,10 +103,29 @@ func (p *Player) ReadPump() {
 		}
 
 		switch msg.Type {
-		case "join_queue":
-			p.Name = msg.Name
+		case "join_spectate":
+			// Client is on the menu page watching live — no name required yet.
+			if p.authedAs != "" {
+				p.Name = p.authedAs
+			} else if msg.Name != "" {
+				p.Name = sanitizeNickname(msg.Name)
+			}
 			if p.Name == "" {
-				p.Name = "Fighter"
+				p.Name = "Spectator"
+			}
+			p.hub.spectate <- p
+
+		case "join_queue":
+			// If the connection was already authenticated via JWT, the name was
+			// set at upgrade time; ignore whatever the client sends.
+			if p.authedAs != "" {
+				p.Name = p.authedAs
+			} else {
+				// Sanitize unauthenticated names: 2-20 alphanumeric/_/- chars.
+				p.Name = sanitizeNickname(msg.Name)
+				if p.Name == "" {
+					p.Name = "Fighter"
+				}
 			}
 			p.hub.queue <- p
 

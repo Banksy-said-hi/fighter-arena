@@ -1,27 +1,45 @@
 package game
 
 import (
+	"encoding/json"
 	"log"
 	"math"
+	"math/rand"
 	"sync"
 	"time"
 )
 
 const (
-	TickRate     = 30
+	TickRate     = 60
 	TickDuration = time.Second / TickRate
 
-	MapWidth  = 800.0
-	MapHeight = 450.0
-	GroundY   = 370.0
+	MapWidth  = 1280.0
+	MapHeight = 720.0
+	GroundY   = 592.0
 
-	PlayerW = 50.0
-	PlayerH = 80.0
+	PlayerW = 27.0
+	PlayerH = 42.0
 
-	Gravity      = 0.65
-	JumpVel      = -13.5
-	MoveSpeed    = 5.0
-	MaxFallSpeed = 18.0
+	// Power-up system
+	PowerUpSpawnTicks  = 480  // spawn every 8s at 60fps
+	PowerUpBuffTicks   = 480  // buff lasts 8s
+	PowerUpCollectR    = 40.0 // collection radius (px)
+	PowerUpBuffMult    = 2.5  // speed / damage multiplier
+	MaxPowerUps        = 3
+
+	// Projectile system
+	ProjectileSpeed    = 10.0 // px/tick
+	ProjectileDamage   = 20   // hp
+	ShootBuffShots     = 5    // shots granted by shoot power-up
+	ShootCooldownTicks = 30   // ticks between shots (~0.5s)
+
+	// Physics values are per-tick. At 60fps each constant is halved vs the
+	// old 30fps values so real-world feel (speed, jump arc) stays identical.
+	// All values scaled ×1.6 to match the larger 1280×720 canvas.
+	Gravity      = 0.52
+	JumpVel      = -10.8
+	MoveSpeed    = 4.0
+	MaxFallSpeed = 14.4
 
 	PhaseCountdown = "countdown"
 	PhaseFighting  = "fighting"
@@ -38,6 +56,21 @@ const (
 	StateHurt           = "hurt"
 	StateKO             = "ko"
 )
+
+type Projectile struct {
+	ID      int     `json:"id"`
+	X       float64 `json:"x"`
+	Y       float64 `json:"y"`
+	VX      float64 `json:"vx"`
+	OwnerID int     `json:"ownerId"`
+}
+
+type PowerUp struct {
+	ID   int     `json:"id"`
+	X    float64 `json:"x"`
+	Y    float64 `json:"y"`
+	Kind string  `json:"kind"` // "speed" | "damage"
+}
 
 type AttackBox struct {
 	X float64 `json:"x"`
@@ -58,6 +91,9 @@ type PlayerState struct {
 	State        string     `json:"state"`
 	AttackActive bool       `json:"attackActive"`
 	AttackBox    *AttackBox `json:"attackBox,omitempty"`
+	SpeedBuff    int        `json:"speedBuff,omitempty"`  // ticks remaining
+	DamageBuff   int        `json:"damageBuff,omitempty"` // ticks remaining
+	ShootBuff    int        `json:"shootBuff,omitempty"`  // shots remaining
 
 	// Internal (not serialised)
 	vx              float64
@@ -68,30 +104,40 @@ type PlayerState struct {
 }
 
 type GameSnapshot struct {
-	Phase     string         `json:"phase"`
-	Countdown int            `json:"countdown"`
+	Phase     string          `json:"phase"`
+	Countdown int             `json:"countdown"`
 	Players   [2]*PlayerState `json:"players"`
-	Winner    string         `json:"winner"`
-	Tick      int            `json:"tick"`
+	Winner    string          `json:"winner"`
+	Tick      int             `json:"tick"`
+	PowerUps    []*PowerUp    `json:"powerUps,omitempty"`
+	Projectiles []*Projectile `json:"projectiles,omitempty"`
 }
 
 type Match struct {
-	players   [2]*Player
-	states    [2]*PlayerState
-	phase     string
-	countdown int
-	winner    string
-	tick      int
-	done      chan struct{}
-	closeOnce sync.Once
+	hub          *Hub          // for spectator broadcast
+	players      [2]*Player
+	states       [2]*PlayerState
+	phase        string
+	countdown    int
+	winner       string
+	tick         int
+	done         chan struct{}
+	closeOnce    sync.Once
+	powerUps     []*PowerUp
+	powerUpSeq   int
+	spawnTimer   int
+	projectiles  []*Projectile
+	projSeq      int
 }
 
-func NewMatch(p1, p2 *Player) *Match {
+func NewMatch(p1, p2 *Player, hub *Hub) *Match {
 	m := &Match{
-		players:   [2]*Player{p1, p2},
-		phase:     PhaseCountdown,
-		countdown: 3,
-		done:      make(chan struct{}),
+		hub:        hub,
+		players:    [2]*Player{p1, p2},
+		phase:      PhaseCountdown,
+		countdown:  3,
+		done:       make(chan struct{}),
+		spawnTimer: 300, // first power-up after 5s
 	}
 
 	p1.Match = m
@@ -198,6 +244,51 @@ func (m *Match) update() {
 		m.updatePlayer(i, inputs[i])
 	}
 
+	// Power-up spawning
+	m.spawnTimer--
+	if m.spawnTimer <= 0 && len(m.powerUps) < MaxPowerUps {
+		m.spawnTimer = PowerUpSpawnTicks
+		kinds := []string{"speed", "damage", "shoot"}
+		m.powerUps = append(m.powerUps, &PowerUp{
+			ID:   m.powerUpSeq,
+			X:    150 + rand.Float64()*(MapWidth-300),
+			Y:    GroundY - PlayerH - 18,
+			Kind: kinds[rand.Intn(2)],
+		})
+		m.powerUpSeq++
+	}
+
+	// Power-up collection
+	var remaining []*PowerUp
+	for _, pu := range m.powerUps {
+		collected := false
+		for _, s := range m.states {
+			if s.State == StateKO {
+				continue
+			}
+			cx := s.X + PlayerW/2
+			cy := s.Y + PlayerH/2
+			dx := cx - pu.X
+			dy := cy - pu.Y
+			if math.Sqrt(dx*dx+dy*dy) < PowerUpCollectR {
+				switch pu.Kind {
+				case "speed":
+					s.SpeedBuff = PowerUpBuffTicks
+				case "damage":
+					s.DamageBuff = PowerUpBuffTicks
+				case "shoot":
+					s.ShootBuff += ShootBuffShots // stackable
+				}
+				collected = true
+				break
+			}
+		}
+		if !collected {
+			remaining = append(remaining, pu)
+		}
+	}
+	m.powerUps = remaining
+
 	// Auto-face opponent
 	for i := 0; i < 2; i++ {
 		s := m.states[i]
@@ -228,6 +319,9 @@ func (m *Match) update() {
 		}
 
 		damage := attackDamage(s.State)
+		if s.DamageBuff > 0 {
+			damage = int(float64(damage) * PowerUpBuffMult)
+		}
 		if opp.State == StateBlocking {
 			damage = damage / 4 // 75% block
 			if damage < 1 {
@@ -240,14 +334,22 @@ func (m *Match) update() {
 			opp.HP = 0
 		}
 
-		// Knockback
+		// Knockback — uppercut launches opponent upward dramatically
 		kbDir := float64(s.Facing)
-		opp.vx = kbDir * 5.0
-		opp.vy = -4.0
-
-		if opp.State != StateBlocking {
-			opp.State = StateHurt
-			opp.actionTimer = 18
+		if s.State == StateAttackUppercut {
+			opp.vx = kbDir * 1.5  // minimal horizontal — it's a vertical move
+			opp.vy = -11.5        // near jump velocity: sends them airborne
+			if opp.State != StateBlocking {
+				opp.State = StateHurt
+				opp.actionTimer = 55 // fib: stays stunned through full flight arc
+			}
+		} else {
+			opp.vx = kbDir * 4.0
+			opp.vy = -3.2
+			if opp.State != StateBlocking {
+				opp.State = StateHurt
+				opp.actionTimer = 36 // 0.6s at 60fps
+			}
 		}
 
 		// Each attack hits once
@@ -260,6 +362,56 @@ func (m *Match) update() {
 			m.winner = s.Name
 		}
 	}
+
+	// Projectile movement + collision
+	var liveProj []*Projectile
+	for _, proj := range m.projectiles {
+		proj.X += proj.VX
+		if proj.X < -50 || proj.X > MapWidth+50 {
+			continue // off-screen, discard
+		}
+		hit := false
+		for _, s := range m.states {
+			if s.ID == proj.OwnerID || s.State == StateKO {
+				continue
+			}
+			if proj.X+10 > s.X && proj.X-10 < s.X+PlayerW &&
+				proj.Y+10 > s.Y && proj.Y-10 < s.Y+PlayerH {
+				dmg := ProjectileDamage
+				if m.states[proj.OwnerID].DamageBuff > 0 {
+					dmg = int(float64(dmg) * PowerUpBuffMult)
+				}
+				if s.State == StateBlocking {
+					dmg = dmg / 4
+					if dmg < 1 {
+						dmg = 1
+					}
+				}
+				s.HP -= dmg
+				if s.HP < 0 {
+					s.HP = 0
+				}
+				kbDir := proj.VX / math.Abs(proj.VX)
+				s.vx = kbDir * 5.0
+				s.vy = -2.5
+				if s.State != StateBlocking {
+					s.State = StateHurt
+					s.actionTimer = 28
+				}
+				if s.HP <= 0 {
+					s.HP = 0
+					s.State = StateKO
+					m.winner = m.states[proj.OwnerID].Name
+				}
+				hit = true
+				break
+			}
+		}
+		if !hit {
+			liveProj = append(liveProj, proj)
+		}
+	}
+	m.projectiles = liveProj
 
 	// Prevent players from walking through each other
 	m.resolveOverlap()
@@ -277,6 +429,13 @@ func (m *Match) updatePlayer(idx int, keys Keys) {
 			s.cooldowns[k]--
 		}
 	}
+	if s.SpeedBuff > 0 {
+		s.SpeedBuff--
+	}
+	if s.DamageBuff > 0 {
+		s.DamageBuff--
+	}
+	// ShootBuff is a shot count, not a timer — don't decrement here.
 
 	onGround := s.Y >= GroundY-PlayerH-1
 
@@ -287,7 +446,7 @@ func (m *Match) updatePlayer(idx int, keys Keys) {
 			s.vy = MaxFallSpeed
 		}
 		s.Y += s.vy
-		s.vx *= 0.75
+		s.vx *= 0.87 // ≈ 0.75^(1/2) — same per-second decay at 60fps
 		s.X += s.vx
 		if s.Y >= GroundY-PlayerH {
 			s.Y = GroundY - PlayerH
@@ -300,7 +459,7 @@ func (m *Match) updatePlayer(idx int, keys Keys) {
 	// --- Hurt stun ---
 	if s.State == StateHurt {
 		applyGravity(s)
-		s.vx *= 0.70
+		s.vx *= 0.84 // ≈ 0.70^(1/2)
 		s.X += s.vx
 		clampX(s)
 		if s.actionTimer <= 0 {
@@ -325,7 +484,7 @@ func (m *Match) updatePlayer(idx int, keys Keys) {
 	// --- Attacking ---
 	if s.State == StateAttackFist || s.State == StateAttackLeg || s.State == StateAttackUppercut {
 		applyGravity(s)
-		s.vx *= 0.80
+		s.vx *= 0.90 // ≈ 0.80^(1/2)
 		s.X += s.vx
 		clampX(s)
 
@@ -370,12 +529,29 @@ func (m *Match) updatePlayer(idx int, keys Keys) {
 		} else {
 			dashDir = 1
 		}
-		s.vx = dashDir * 8.0
+		s.vx = dashDir * 6.4
 		s.State = StateDodging
 		s.dodgeInvincible = true
-		s.actionTimer = 18
-		s.cooldowns["dodge"] = 48
+		s.actionTimer = 36  // doubled ticks = same 0.6s
+		s.cooldowns["dodge"] = 96
 		return
+	}
+
+	// Fire projectile
+	if keys.Shoot && s.ShootBuff > 0 && s.cooldowns["shoot"] <= 0 {
+		centerY := s.Y + PlayerH/2
+		vx := ProjectileSpeed * float64(s.Facing)
+		startX := s.X + PlayerW/2
+		m.projectiles = append(m.projectiles, &Projectile{
+			ID:      m.projSeq,
+			X:       startX,
+			Y:       centerY,
+			VX:      vx,
+			OwnerID: idx,
+		})
+		m.projSeq++
+		s.ShootBuff--
+		s.cooldowns["shoot"] = ShootCooldownTicks
 	}
 
 	// Attacks (priority: uppercut > leg > fist)
@@ -392,17 +568,21 @@ func (m *Match) updatePlayer(idx int, keys Keys) {
 		return
 	}
 
-	// Movement
+	// Movement (speed buff applies here)
+	speed := MoveSpeed
+	if s.SpeedBuff > 0 {
+		speed = MoveSpeed * PowerUpBuffMult
+	}
 	moving := false
 	if keys.Left {
-		s.vx = -MoveSpeed
+		s.vx = -speed
 		moving = true
 	} else if keys.Right {
-		s.vx = MoveSpeed
+		s.vx = speed
 		moving = true
 	} else {
-		s.vx *= 0.65
-		if math.Abs(s.vx) < 0.3 {
+		s.vx *= 0.81 // ≈ 0.65^(1/2)
+		if math.Abs(s.vx) < 0.15 {
 			s.vx = 0
 		}
 	}
@@ -432,17 +612,18 @@ func startAttack(s *PlayerState, attackState string) {
 	var duration, cooldown int
 	var aw, ah, ayOffset float64
 
+	// Durations and cooldowns doubled (ticks) — same real-world seconds at 60fps
 	switch attackState {
 	case StateAttackFist:
-		duration, cooldown = 18, 28
-		aw, ah, ayOffset = 65, 38, 22
+		duration, cooldown = 36, 56
+		aw, ah, ayOffset = 36, 21, 12
 	case StateAttackLeg:
-		duration, cooldown = 22, 38
-		aw, ah, ayOffset = 80, 48, 38
+		duration, cooldown = 44, 76
+		aw, ah, ayOffset = 42, 27, 21
 	case StateAttackUppercut:
-		duration, cooldown = 28, 55
-		aw, ah, ayOffset = 55, 65, -5
-		s.vy = -5.0 // small hop
+		duration, cooldown = 56, 110
+		aw, ah, ayOffset = 30, 36, -3
+		s.vy = -4.0 // small hop
 	}
 
 	s.actionTimer = duration
@@ -474,11 +655,11 @@ func updateAttackBoxPos(s *PlayerState) {
 	var ayOffset float64
 	switch s.State {
 	case StateAttackFist:
-		ayOffset = 22
+		ayOffset = 12
 	case StateAttackLeg:
-		ayOffset = 38
+		ayOffset = 21
 	case StateAttackUppercut:
-		ayOffset = -5
+		ayOffset = -3
 	}
 
 	s.AttackBox.X = abX
@@ -546,18 +727,33 @@ func (m *Match) resolveOverlap() {
 
 func (m *Match) broadcastState() {
 	snap := &GameSnapshot{
-		Phase:     m.phase,
-		Countdown: m.countdown,
-		Players:   m.states,
-		Winner:    m.winner,
-		Tick:      m.tick,
+		Phase:       m.phase,
+		Countdown:   m.countdown,
+		Players:     m.states,
+		Winner:      m.winner,
+		Tick:        m.tick,
+		PowerUps:    m.powerUps,
+		Projectiles: m.projectiles,
 	}
-	m.broadcast(map[string]interface{}{"type": "state", "state": snap})
+	// Marshal once, send the same bytes to both players
+	data, err := json.Marshal(map[string]interface{}{"type": "state", "state": snap})
+	if err != nil {
+		return
+	}
+	for _, p := range m.players {
+		p.SendBytes(data)
+	}
+	// Fan the same bytes to every spectator watching on the menu page.
+	m.hub.BroadcastSpectators(data)
 }
 
 func (m *Match) broadcast(msg interface{}) {
+	data, err := json.Marshal(msg)
+	if err != nil {
+		return
+	}
 	for _, p := range m.players {
-		p.Send(msg)
+		p.SendBytes(data)
 	}
 }
 

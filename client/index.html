@@ -4,113 +4,236 @@
   <meta charset="UTF-8" />
   <meta name="viewport" content="width=device-width, initial-scale=1.0" />
   <title>Fighter Arena</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com" />
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+  <link href="https://fonts.googleapis.com/css2?family=Bangers&display=swap" rel="stylesheet" />
   <link rel="stylesheet" href="style.css" />
 </head>
 <body>
+<canvas id="bg-canvas"></canvas>
 <div id="app">
 
-  <!-- ── QUEUE / MENU SCREEN ─────────────────────────────── -->
-  <div id="queue-screen" class="screen">
-
-    <!-- Title -->
+  <!-- ── LOGIN SCREEN ─────────────────────────────────────── -->
+  <div id="login-screen" class="screen hidden">
     <div class="title-block">
       <div class="title-text">FIGHTER</div>
       <div class="title-sub">ARENA</div>
     </div>
+    <div class="auth-card">
+      <p class="auth-tagline">Sign in to track your wins</p>
+      <a href="/auth/google" class="google-btn">
+        <svg width="20" height="20" viewBox="0 0 48 48" aria-hidden="true">
+          <path fill="#EA4335" d="M24 9.5c3.54 0 6.71 1.22 9.21 3.6l6.85-6.85C35.9 2.38 30.47 0 24 0 14.62 0 6.51 5.38 2.56 13.22l7.98 6.19C12.43 13.72 17.74 9.5 24 9.5z"/>
+          <path fill="#4285F4" d="M46.98 24.55c0-1.57-.15-3.09-.38-4.55H24v9.02h12.94c-.58 2.96-2.26 5.48-4.78 7.18l7.73 6c4.51-4.18 7.09-10.36 7.09-17.65z"/>
+          <path fill="#FBBC05" d="M10.53 28.59c-.48-1.45-.76-2.99-.76-4.59s.27-3.14.76-4.59l-7.98-6.19C.92 16.46 0 20.12 0 24c0 3.88.92 7.54 2.56 10.78l7.97-6.19z"/>
+          <path fill="#34A853" d="M24 48c6.48 0 11.93-2.13 15.89-5.81l-7.73-6c-2.15 1.45-4.92 2.3-8.16 2.3-6.26 0-11.57-4.22-13.47-9.91l-7.98 6.19C6.51 42.62 14.62 48 24 48z"/>
+          <path fill="none" d="M0 0h48v48H0z"/>
+        </svg>
+        Sign in with Google
+      </a>
+      <p class="auth-note">Your Google name is never shown — you'll pick a nickname</p>
+    </div>
+  </div>
 
-    <!-- Showcase row: Alice | Battle Preview | Bob -->
-    <div class="showcase">
+  <!-- ── NICKNAME SCREEN ────────────────────────────────────── -->
+  <div id="nickname-screen" class="screen hidden">
+    <div class="title-block">
+      <div class="title-text">FIGHTER</div>
+      <div class="title-sub">ARENA</div>
+    </div>
+    <div class="auth-card">
+      <p class="auth-tagline">Choose your fighter name</p>
+      <input id="nick-input" type="text" placeholder="e.g. ShadowKick99"
+             maxlength="20" autocomplete="off" spellcheck="false" />
+      <p class="nick-rules">2–20 chars · letters, numbers, _ or -</p>
+      <button id="nick-btn">CONFIRM NAME</button>
+      <p id="nick-error" class="nick-error hidden"></p>
+    </div>
+  </div>
 
-      <!-- Alice card -->
-      <div class="char-card" id="alice-card">
-        <div class="player-badge p1">P1</div>
-        <canvas id="alice-canvas" width="130" height="180"></canvas>
-        <div class="char-name" style="color:#FF69B4">ALICE</div>
-        <div class="char-stats">
-          <div class="stat-row"><span class="stat-label">SPD</span><span class="stars">★★★★☆</span></div>
-          <div class="stat-row"><span class="stat-label">PWR</span><span class="stars">★★★☆☆</span></div>
-          <div class="stat-row"><span class="stat-label">DEF</span><span class="stars">★★★★☆</span></div>
+  <!-- ── QUEUE / MENU SCREEN ─────────────────────────────── -->
+  <div id="queue-screen" class="screen">
+
+    <!-- Header row: title + welcome bar -->
+    <div id="menu-header">
+      <div class="title-block">
+        <div class="title-text">FIGHTER</div>
+        <div class="title-sub">ARENA</div>
+      </div>
+      <div id="welcome-bar" class="hidden">
+        <span id="welcome-msg"></span>
+        <a href="/auth/logout" id="logout-btn">LOG OUT</a>
+      </div>
+    </div>
+
+    <div id="menu-body">
+
+      <!-- ── LEFT COLUMN ──────────────────────────────────── -->
+      <div id="menu-left">
+
+        <!-- Join form (shown by default) -->
+        <div id="name-form">
+          <input id="name-input" type="text" placeholder="Enter your name" maxlength="16" autocomplete="off" />
+          <div class="btn-row-main">
+            <button id="join-btn" class="btn-play-next">
+              <span class="btn-icon">⚔</span>
+              <span class="btn-text">
+                <span class="btn-label">PLAY NEXT</span>
+                <span class="btn-sub">Join the waiting line</span>
+              </span>
+            </button>
+            <button id="private-btn" class="btn-private-room">
+              <span class="btn-icon">🔒</span>
+              <span class="btn-text">
+                <span class="btn-label">PRIVATE ROOM</span>
+                <span class="btn-sub">Invite a friend to play</span>
+              </span>
+            </button>
+          </div>
         </div>
-      </div>
 
-      <!-- Battle preview -->
-      <div class="preview-area">
-        <div class="preview-label">⚔ BATTLE PREVIEW ⚔</div>
-        <div class="preview-frame">
-          <canvas id="preview-canvas" width="420" height="190"></canvas>
+        <!-- Waiting status (shown after joining) -->
+        <div id="queue-status" class="hidden">
+          <div class="spinner"></div>
+          <p id="queue-msg">Waiting for opponent…</p>
+          <button id="cancel-btn">Cancel</button>
         </div>
-      </div>
 
-      <!-- Bob card -->
-      <div class="char-card" id="bob-card">
-        <div class="player-badge p2">P2</div>
-        <canvas id="bob-canvas" width="130" height="180"></canvas>
-        <div class="char-name" style="color:#FF8C00">BOB</div>
-        <div class="char-stats">
-          <div class="stat-row"><span class="stat-label">SPD</span><span class="stars">★★★☆☆</span></div>
-          <div class="stat-row"><span class="stat-label">PWR</span><span class="stars">★★★★☆</span></div>
-          <div class="stat-row"><span class="stat-label">DEF</span><span class="stars">★★★☆☆</span></div>
+        <button id="preview-btn" class="btn-test-match hidden">
+          <span class="btn-icon">🎮</span>
+          <span class="btn-text">
+            <span class="btn-label">TEST MATCH</span>
+            <span class="btn-sub">Play solo vs a bot</span>
+          </span>
+        </button>
+
+      </div><!-- /menu-left -->
+
+      <!-- ── RIGHT PANEL — tabbed window ──────────────────── -->
+      <div id="right-panel">
+
+        <!-- Tab bar -->
+        <div id="panel-tabs">
+          <button class="panel-tab active" data-tab="spectate">⚔ LIVE MATCH</button>
+          <button class="panel-tab" data-tab="leaderboard">🏆 LEADERBOARD</button>
+          <button class="panel-tab" data-tab="status">⚡ LIVE STATUS</button>
         </div>
-      </div>
 
-    </div><!-- /showcase -->
+        <!-- Pane container — fixed 16:9 so all tabs hold the same size -->
+        <div id="panel-body">
 
-    <!-- Join form (shown by default) -->
-    <div id="name-form">
-      <input id="name-input" type="text" placeholder="Enter your name" maxlength="16" autocomplete="off" />
-      <div class="btn-row">
-        <button id="join-btn">JOIN QUEUE</button>
-        <button id="share-btn">SHARE LINK</button>
-      </div>
-    </div>
+          <!-- Tab: Live Match -->
+          <div id="tab-spectate" class="panel-pane">
+            <div id="spectate-section">
+              <canvas id="spectate-canvas" width="1280" height="720"></canvas>
+              <div id="spectate-nameplates" class="hidden">
+                <div class="np-player np-p1">
+                  <span class="np-tag">P1</span>
+                  <span id="np-p1-name">—</span>
+                </div>
+                <div class="np-vs">VS</div>
+                <div class="np-player np-p2">
+                  <span id="np-p2-name">—</span>
+                  <span class="np-tag">P2</span>
+                </div>
+              </div>
+            </div>
+          </div>
 
-    <!-- Waiting status (shown after joining) -->
-    <div id="queue-status" class="hidden">
-      <div class="spinner"></div>
-      <p id="queue-msg">Waiting for opponent…</p>
-      <button id="cancel-btn">Cancel</button>
-    </div>
+          <!-- Tab: Leaderboard -->
+          <div id="tab-leaderboard" class="panel-pane hidden">
+            <div class="table-panel">
+              <table id="leaderboard-table">
+                <thead><tr><th>#</th><th>Player</th><th>Wins</th></tr></thead>
+                <tbody id="leaderboard-body">
+                  <tr><td colspan="3" class="lb-empty">No matches played yet</td></tr>
+                </tbody>
+              </table>
+            </div>
+          </div>
 
-    <!-- Leaderboard + Queue side by side -->
-    <div id="tables-row">
+          <!-- Tab: Live Status -->
+          <div id="tab-status" class="panel-pane hidden">
+            <div class="table-panel">
+              <table id="queue-table">
+                <thead><tr><th>Status</th><th>Player</th><th>Time</th></tr></thead>
+                <tbody id="queue-body">
+                  <tr><td colspan="3" class="lb-empty">Loading...</td></tr>
+                </tbody>
+              </table>
+              <div id="server-stats"></div>
+            </div>
+          </div>
 
-      <div class="table-panel">
-        <div class="lb-title">🏆 TOP FIGHTERS</div>
-        <table id="leaderboard-table">
-          <thead><tr><th>#</th><th>Player</th><th>Wins</th></tr></thead>
-          <tbody id="leaderboard-body">
-            <tr><td colspan="3" class="lb-empty">No matches played yet</td></tr>
-          </tbody>
-        </table>
-      </div>
+        </div><!-- /panel-body -->
 
-      <div class="table-panel">
-        <div class="lb-title">⚡ LIVE STATUS</div>
-        <table id="queue-table">
-          <thead><tr><th>Status</th><th>Player</th><th>Time</th></tr></thead>
-          <tbody id="queue-body">
-            <tr><td colspan="3" class="lb-empty">Loading...</td></tr>
-          </tbody>
-        </table>
-        <div id="server-stats"></div>
-      </div>
+      </div><!-- /right-panel -->
 
-    </div>
-
-    <div class="controls-hint">
-      ← → Move &nbsp;|&nbsp; ↑ Jump &nbsp;|&nbsp;
-      A Fist &nbsp;|&nbsp; S Leg &nbsp;|&nbsp; D Uppercut &nbsp;|&nbsp;
-      F Block &nbsp;|&nbsp; G Dodge
-    </div>
+    </div><!-- /menu-body -->
   </div>
 
   <!-- ── GAME SCREEN ─────────────────────────────────────── -->
   <div id="game-screen" class="screen hidden">
-    <canvas id="game-canvas" width="800" height="450"></canvas>
-    <div class="controls-hint small">
-      ← → Move &nbsp;|&nbsp; ↑ Jump &nbsp;|&nbsp;
-      A Fist &nbsp;|&nbsp; S Leg &nbsp;|&nbsp; D Uppercut &nbsp;|&nbsp;
-      F Block &nbsp;|&nbsp; G Dodge
+    <div style="position:relative; display:inline-block;">
+      <canvas id="game-canvas" width="1280" height="720"></canvas>
+
+      <!-- Waiting overlay (shown while in queue, hidden once match starts) -->
+      <div id="waiting-overlay" class="hidden">
+        <div class="wo-inner">
+          <div class="wo-spinner"></div>
+          <p class="wo-title">WAITING FOR OPPONENT</p>
+          <p class="wo-sub">Share the link to challenge a friend</p>
+          <button id="wo-share-btn">COPY INVITE LINK</button>
+          <button id="wo-cancel-btn">LEAVE QUEUE</button>
+        </div>
+      </div>
+    </div>
+    <div id="controls-bar">
+      <div class="ctrl-group">
+        <div class="ctrl-keys">
+          <kbd>←</kbd><kbd>→</kbd>
+        </div>
+        <span class="ctrl-label">Move</span>
+      </div>
+      <div class="ctrl-sep"></div>
+      <div class="ctrl-group">
+        <div class="ctrl-keys">
+          <kbd>↑</kbd>
+        </div>
+        <span class="ctrl-label">Jump</span>
+      </div>
+      <div class="ctrl-sep"></div>
+      <div class="ctrl-group">
+        <div class="ctrl-keys">
+          <kbd>A</kbd>
+        </div>
+        <span class="ctrl-label">Fist</span>
+      </div>
+      <div class="ctrl-group">
+        <div class="ctrl-keys">
+          <kbd>S</kbd>
+        </div>
+        <span class="ctrl-label">Leg</span>
+      </div>
+      <div class="ctrl-group">
+        <div class="ctrl-keys">
+          <kbd>D</kbd>
+        </div>
+        <span class="ctrl-label">Uppercut</span>
+      </div>
+      <div class="ctrl-sep"></div>
+      <div class="ctrl-group">
+        <div class="ctrl-keys">
+          <kbd>F</kbd>
+        </div>
+        <span class="ctrl-label">Block</span>
+      </div>
+      <div class="ctrl-group">
+        <div class="ctrl-keys">
+          <kbd>G</kbd>
+        </div>
+        <span class="ctrl-label">Dodge</span>
+      </div>
     </div>
   </div>
 

@@ -16,8 +16,9 @@ type LeaderboardEntry struct {
 
 // Leaderboard keeps an in-memory fallback and writes through to SQLite when available.
 type Leaderboard struct {
-	mu   sync.RWMutex
-	wins map[string]int
+	mu          sync.RWMutex
+	wins        map[string]int
+	cachedTop5  []LeaderboardEntry // nil means stale
 }
 
 var GlobalLeaderboard = &Leaderboard{
@@ -25,9 +26,10 @@ var GlobalLeaderboard = &Leaderboard{
 }
 
 func (lb *Leaderboard) RecordWin(name string) {
-	// Always update in-memory
+	// Always update in-memory and invalidate cache
 	lb.mu.Lock()
 	lb.wins[name]++
+	lb.cachedTop5 = nil // invalidate
 	lb.mu.Unlock()
 
 	// Persist to SQLite
@@ -44,6 +46,27 @@ func (lb *Leaderboard) RecordWin(name string) {
 }
 
 func (lb *Leaderboard) Top5() []LeaderboardEntry {
+	// Return cached result if valid
+	lb.mu.RLock()
+	if lb.cachedTop5 != nil {
+		result := lb.cachedTop5
+		lb.mu.RUnlock()
+		return result
+	}
+	lb.mu.RUnlock()
+
+	// Build fresh result
+	entries := lb.buildTop5()
+
+	// Cache it
+	lb.mu.Lock()
+	lb.cachedTop5 = entries
+	lb.mu.Unlock()
+
+	return entries
+}
+
+func (lb *Leaderboard) buildTop5() []LeaderboardEntry {
 	// Read from SQLite when available
 	if DB != nil {
 		rows, err := DB.Query(`

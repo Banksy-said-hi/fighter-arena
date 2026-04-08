@@ -19,3 +19,10 @@ server/fighter-game-server
 # Env / secrets
 .env
 *.env.local
+
+# Client build artifacts / deps
+client/node_modules/
+client/game.js.map
+
+# SQLite database (runtime data, not source)
+server/fighter.db

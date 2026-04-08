@@ -1,0 +1,13 @@
+{
+  "name": "fighter-arena-client",
+  "private": true,
+  "scripts": {
+    "build": "esbuild src/main.ts --bundle --outfile=game.js --sourcemap",
+    "watch": "esbuild src/main.ts --bundle --outfile=game.js --sourcemap --watch",
+    "typecheck": "tsc --noEmit"
+  },
+  "devDependencies": {
+    "esbuild": "^0.21.0",
+    "typescript": "^5.4.0"
+  }
+}
