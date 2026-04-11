@@ -1,4 +1,4 @@
-import type { ClientMessage, ServerMessage, QueueStatus, Keys, PlayerState } from './types';
+import type { ClientMessage, ServerMessage, QueueStatus, Keys, PlayerState, ActionEventName } from './types';
 import { state } from './state';
 import { PLAYER_W, PLAYER_H } from './constants';
 import { playSound } from './audio';
@@ -73,7 +73,7 @@ export function joinQueueFromSpectate(playerName: string): void {
 export function sendInput(): void {
   const { ws, phase, keys } = state;
   if (ws && ws.readyState === WebSocket.OPEN && phase === 'game') {
-    wsSend({ type: 'input', keys });
+    if (state.attackBuf.length > 0) { const ab = state.attackBuf.splice(0); wsSend({ type: "input", keys, ab }); } else { wsSend({ type: "input", keys }); }
   }
 }
 
@@ -251,7 +251,7 @@ function detectHitEffects(
 
 export function startInputLoop(): void {
   stopInputLoop();
-  state.inputInterval = setInterval(() => sendInput(), 1000 / 30);
+  state.inputInterval = setInterval(() => sendInput(), 1000 / 60);
 }
 
 export function stopInputLoop(): void {
@@ -294,10 +294,12 @@ document.addEventListener('keydown', e => {
   e.preventDefault();
   if (!state.keys[action]) {
     state.keys[action] = true;
+    if (action === 'fist')     { state.attackBuf.push('attack_fist');     tryPredictAttack('attack_fist');     playSound('fist'); }
+    if (action === 'leg')      { state.attackBuf.push('attack_leg');      tryPredictAttack('attack_leg');      playSound('leg'); }
+    if (action === 'uppercut') { state.attackBuf.push('attack_uppercut'); tryPredictAttack('attack_uppercut'); playSound('uppercut'); }
+    if (action === 'dodge')    { (state.attackBuf as ActionEventName[]).push('dodge'); }
+    if (action === 'jump')     { (state.attackBuf as ActionEventName[]).push('jump'); }
     sendInput();
-    if (action === 'fist')     { tryPredictAttack('attack_fist');     playSound('fist'); }
-    if (action === 'leg')      { tryPredictAttack('attack_leg');      playSound('leg'); }
-    if (action === 'uppercut') { tryPredictAttack('attack_uppercut'); playSound('uppercut'); }
   }
 });
 

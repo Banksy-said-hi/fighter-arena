@@ -30,22 +30,24 @@ type Keys struct {
 }
 
 type Player struct {
-	hub      *Hub
-	conn     *websocket.Conn
-	send     chan []byte
-	closed   atomic.Bool // set to true when hub closes the send channel
-	mu       sync.Mutex
-	ID       int
-	Name     string
-	Keys     Keys
-	Match    *Match
-	authedAs string // non-empty when name came from a verified JWT
+	hub          *Hub
+	conn         *websocket.Conn
+	send         chan []byte
+	closed       atomic.Bool // set to true when hub closes the send channel
+	mu           sync.Mutex
+	ID           int
+	Name         string
+	Keys         Keys
+	attackEvents []string // attack events received since last tick
+	Match        *Match
+	authedAs     string // non-empty when name came from a verified JWT
 }
 
 type IncomingMsg struct {
-	Type string `json:"type"`
-	Name string `json:"name,omitempty"`
-	Keys *Keys  `json:"keys,omitempty"`
+	Type string   `json:"type"`
+	Name string   `json:"name,omitempty"`
+	Keys *Keys    `json:"keys,omitempty"`
+	AB   []string `json:"ab,omitempty"` // attack events (keypresses, not key state)
 }
 
 func NewPlayer(hub *Hub, conn *websocket.Conn) *Player {
@@ -130,11 +132,14 @@ func (p *Player) ReadPump() {
 			p.hub.queue <- p
 
 		case "input":
+			p.mu.Lock()
 			if msg.Keys != nil {
-				p.mu.Lock()
 				p.Keys = *msg.Keys
-				p.mu.Unlock()
 			}
+			if len(msg.AB) > 0 {
+				p.attackEvents = append(p.attackEvents, msg.AB...)
+			}
+			p.mu.Unlock()
 		}
 	}
 }

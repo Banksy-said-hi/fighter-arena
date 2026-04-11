@@ -47,6 +47,7 @@ export interface State {
 
   // ── Keyboard input ─────────────────────────────────────────────────────────
   keys: Keys;
+  attackBuf: AttackStateName[];  // attack events pending delivery to server
 
   // ── Preview / offline sandbox mode ────────────────────────────────────────
   previewMode: boolean;
@@ -87,6 +88,7 @@ export const state: State = {
     fist: false, leg: false, uppercut: false,
     block: false, dodge: false, shoot: false,
   },
+  attackBuf: [],
   previewMode: false,
   previewBotTick: 0,
   previewAttackTimer: 0,

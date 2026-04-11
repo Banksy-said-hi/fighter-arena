@@ -108,7 +108,7 @@ func TestJumpOnlyFromGround(t *testing.T) {
 	s0.Y = GroundY - PlayerH // on ground
 	s0.vy = 0
 
-	m.updatePlayer(0, Keys{Jump: true})
+	m.updatePlayer(0, Keys{Jump: true}, Keys{})
 
 	if s0.vy >= 0 {
 		t.Errorf("jump should give negative vy (upward), got %f", s0.vy)
@@ -120,7 +120,7 @@ func TestNoJumpInAir(t *testing.T) {
 	s0.Y = 100 // airborne
 	s0.vy = 0
 
-	m.updatePlayer(0, Keys{Jump: true})
+	m.updatePlayer(0, Keys{Jump: true}, Keys{})
 
 	// vy should only change from gravity, not jump
 	if s0.vy == JumpVel {
@@ -134,12 +134,12 @@ func TestMovementSetsVX(t *testing.T) {
 	m, s0, _ := newFightingMatch()
 	s0.Y = GroundY - PlayerH
 
-	m.updatePlayer(0, Keys{Right: true})
+	m.updatePlayer(0, Keys{Right: true}, Keys{})
 	if s0.vx != MoveSpeed {
 		t.Errorf("right key: expected vx=%f, got %f", MoveSpeed, s0.vx)
 	}
 
-	m.updatePlayer(0, Keys{Left: true})
+	m.updatePlayer(0, Keys{Left: true}, Keys{})
 	if s0.vx != -MoveSpeed {
 		t.Errorf("left key: expected vx=%f, got %f", -MoveSpeed, s0.vx)
 	}
@@ -150,7 +150,7 @@ func TestIdleDecelerates(t *testing.T) {
 	s0.Y = GroundY - PlayerH
 	s0.vx = 10
 
-	m.updatePlayer(0, noKeys())
+	m.updatePlayer(0, noKeys(), Keys{})
 
 	if math.Abs(s0.vx) >= 10 {
 		t.Errorf("vx should decelerate when no key pressed, got %f", s0.vx)
@@ -161,7 +161,7 @@ func TestStateWalkingWhenMoving(t *testing.T) {
 	m, s0, _ := newFightingMatch()
 	s0.Y = GroundY - PlayerH
 
-	m.updatePlayer(0, Keys{Right: true})
+	m.updatePlayer(0, Keys{Right: true}, Keys{})
 	if s0.State != StateWalking {
 		t.Errorf("expected walking state, got %s", s0.State)
 	}
@@ -171,7 +171,7 @@ func TestStateJumpingWhenAirborne(t *testing.T) {
 	m, s0, _ := newFightingMatch()
 	s0.Y = 100 // airborne
 
-	m.updatePlayer(0, noKeys())
+	m.updatePlayer(0, noKeys(), Keys{})
 	if s0.State != StateJumping {
 		t.Errorf("expected jumping state when airborne, got %s", s0.State)
 	}
@@ -336,14 +336,14 @@ func TestHurtStunDuration(t *testing.T) {
 
 	// Run 35 more ticks — should still be hurt
 	for i := 0; i < timerAfterHit-1; i++ {
-		m.updatePlayer(1, noKeys())
+		m.updatePlayer(1, noKeys(), Keys{})
 	}
 	if s1.State != StateHurt {
 		t.Errorf("should still be in hurt state after %d ticks, got %s", timerAfterHit-1, s1.State)
 	}
 
 	// One more tick — timer hits 0, transitions to idle
-	m.updatePlayer(1, noKeys())
+	m.updatePlayer(1, noKeys(), Keys{})
 	if s1.State != StateIdle {
 		t.Errorf("should transition to idle after hurt expires, got %s", s1.State)
 	}
@@ -371,7 +371,7 @@ func TestKOPlayerIgnoresInput(t *testing.T) {
 	s0.Y = GroundY - PlayerH
 
 	// KO player should not be able to attack
-	m.updatePlayer(0, Keys{Fist: true, Left: true, Jump: true})
+	m.updatePlayer(0, Keys{Fist: true, Left: true, Jump: true}, Keys{})
 
 	if s0.State != StateKO {
 		t.Errorf("KO player should stay KO, got %s", s0.State)
@@ -439,7 +439,7 @@ func TestCooldownPreventsAttack(t *testing.T) {
 	s0.Y = GroundY - PlayerH
 	s0.cooldowns["fist"] = 50 // on cooldown
 
-	m.updatePlayer(0, Keys{Fist: true})
+	m.updatePlayer(0, Keys{Fist: true}, Keys{})
 
 	if s0.State == StateAttackFist {
 		t.Error("should not be able to attack while on cooldown")
@@ -451,9 +451,9 @@ func TestCooldownExpiresAndAllowsAttack(t *testing.T) {
 	s0.Y = GroundY - PlayerH
 	s0.cooldowns["fist"] = 1 // expires after this tick
 
-	m.updatePlayer(0, noKeys()) // tick cooldown down to 0
+	m.updatePlayer(0, noKeys(), Keys{}) // tick cooldown down to 0
 
-	m.updatePlayer(0, Keys{Fist: true})
+	m.updatePlayer(0, Keys{Fist: true}, Keys{})
 	if s0.State != StateAttackFist {
 		t.Errorf("should be able to attack after cooldown expires, got %s", s0.State)
 	}
@@ -464,7 +464,7 @@ func TestAttackPriorityUppercutOverLeg(t *testing.T) {
 	s0.Y = GroundY - PlayerH
 
 	// Press both uppercut and leg simultaneously
-	m.updatePlayer(0, Keys{Uppercut: true, Leg: true})
+	m.updatePlayer(0, Keys{Uppercut: true, Leg: true}, Keys{})
 
 	if s0.State != StateAttackUppercut {
 		t.Errorf("uppercut should take priority over leg, got %s", s0.State)
@@ -475,7 +475,7 @@ func TestAttackPriorityLegOverFist(t *testing.T) {
 	m, s0, _ := newFightingMatch()
 	s0.Y = GroundY - PlayerH
 
-	m.updatePlayer(0, Keys{Leg: true, Fist: true})
+	m.updatePlayer(0, Keys{Leg: true, Fist: true}, Keys{})
 
 	if s0.State != StateAttackLeg {
 		t.Errorf("leg should take priority over fist, got %s", s0.State)
@@ -488,7 +488,7 @@ func TestDodgeSetsInvincible(t *testing.T) {
 	m, s0, _ := newFightingMatch()
 	s0.Y = GroundY - PlayerH
 
-	m.updatePlayer(0, Keys{Dodge: true})
+	m.updatePlayer(0, Keys{Dodge: true}, Keys{})
 
 	if !s0.dodgeInvincible {
 		t.Error("dodge should set dodgeInvincible")
@@ -503,7 +503,7 @@ func TestDodgeCooldownPreventsRepeat(t *testing.T) {
 	s0.Y = GroundY - PlayerH
 	s0.cooldowns["dodge"] = 50
 
-	m.updatePlayer(0, Keys{Dodge: true})
+	m.updatePlayer(0, Keys{Dodge: true}, Keys{})
 
 	if s0.State == StateDodging {
 		t.Error("should not dodge while on cooldown")
@@ -516,7 +516,7 @@ func TestDodgeInvincibilityClears(t *testing.T) {
 	s0.dodgeInvincible = true
 	s0.actionTimer = 1 // expires next tick
 
-	m.updatePlayer(0, noKeys())
+	m.updatePlayer(0, noKeys(), Keys{})
 
 	if s0.dodgeInvincible {
 		t.Error("dodgeInvincible should clear when dodge ends")
@@ -532,7 +532,7 @@ func TestBlockOnGroundOnly(t *testing.T) {
 	m, s0, _ := newFightingMatch()
 	s0.Y = 100 // airborne
 
-	m.updatePlayer(0, Keys{Block: true})
+	m.updatePlayer(0, Keys{Block: true}, Keys{})
 
 	if s0.State == StateBlocking {
 		t.Error("should not be able to block while airborne")
@@ -543,7 +543,7 @@ func TestBlockReleasedExitsState(t *testing.T) {
 	m, s0, _ := newFightingMatch()
 	s0.State = StateBlocking
 
-	m.updatePlayer(0, noKeys()) // Block key not held
+	m.updatePlayer(0, noKeys(), Keys{}) // Block key not held
 
 	if s0.State == StateBlocking {
 		t.Error("blocking should end when block key released")
@@ -734,5 +734,110 @@ func TestNewMatchStartPositions(t *testing.T) {
 	}
 	if s0.Facing != 1 || s1.Facing != -1 {
 		t.Errorf("facings wrong: s0=%d s1=%d", s0.Facing, s1.Facing)
+	}
+}
+
+// ── Attack queue (FIFO) ───────────────────────────────────────────────────────
+
+// TestAttackQueueFIFOOrder verifies that attacks queued during an animation
+// fire in press order (fist → leg → uppercut), not last-write-wins.
+func TestAttackQueueFIFOOrder(t *testing.T) {
+	m, s0, _ := newFightingMatch()
+	s0.Y = GroundY - PlayerH
+
+	// Start a fist attack.
+	m.updatePlayer(0, Keys{Fist: true}, Keys{})
+	if s0.State != StateAttackFist {
+		t.Fatalf("expected attack_fist, got %s", s0.State)
+	}
+
+	// While fist is running, press leg then uppercut on successive ticks.
+	m.updatePlayer(0, Keys{Leg: true}, Keys{})
+	m.updatePlayer(0, Keys{Uppercut: true}, Keys{Leg: true})
+
+	if s0.attackQueueLen != 2 {
+		t.Fatalf("expected 2 queued attacks, got %d", s0.attackQueueLen)
+	}
+	if s0.attackQueue[0] != StateAttackLeg {
+		t.Errorf("first queued attack should be leg, got %s", s0.attackQueue[0])
+	}
+	if s0.attackQueue[1] != StateAttackUppercut {
+		t.Errorf("second queued attack should be uppercut, got %s", s0.attackQueue[1])
+	}
+
+	// Drain the fist animation.
+	for s0.State == StateAttackFist {
+		m.updatePlayer(0, noKeys(), Keys{})
+	}
+	// Leg should fire immediately when fist ends.
+	if s0.State != StateAttackLeg {
+		t.Errorf("expected attack_leg after fist, got %s", s0.State)
+	}
+
+	// Drain leg.
+	for s0.State == StateAttackLeg {
+		m.updatePlayer(0, noKeys(), Keys{})
+	}
+	if s0.State != StateAttackUppercut {
+		t.Errorf("expected attack_uppercut after leg, got %s", s0.State)
+	}
+}
+
+// TestAttackQueueChainOnHit verifies that when a hit connects the queued
+// attack fires immediately rather than waiting for the animation timer.
+func TestAttackQueueChainOnHit(t *testing.T) {
+	m, s0, s1 := newFightingMatch()
+	placeAdjacent(s0, s1)
+	s0.Y = GroundY - PlayerH
+	s1.Y = GroundY - PlayerH
+
+	// Start fist, queue leg.
+	m.updatePlayer(0, Keys{Fist: true}, Keys{})
+	m.updatePlayer(0, Keys{Leg: true}, Keys{})
+
+	// Run until fist hit lands (AttackActive flips false after overlap).
+	chainedInTime := false
+	for i := 0; i < 60; i++ {
+		m.updatePlayer(0, noKeys(), Keys{})
+		if s0.State == StateAttackLeg {
+			chainedInTime = true
+			break
+		}
+	}
+	if !chainedInTime {
+		t.Errorf("leg should chain as soon as fist lands, state=%s", s0.State)
+	}
+}
+
+// TestAttackQueueDropsWhenFull verifies the queue silently drops a 4th attack
+// rather than overflowing the fixed [3]string array.
+func TestAttackQueueDropsWhenFull(t *testing.T) {
+	s := &PlayerState{cooldowns: make(map[string]int)}
+	s.queueAttack(StateAttackFist)
+	s.queueAttack(StateAttackLeg)
+	s.queueAttack(StateAttackUppercut)
+	s.queueAttack(StateAttackFist) // 4th — should be dropped
+
+	if s.attackQueueLen != 3 {
+		t.Errorf("queue should cap at 3, got %d", s.attackQueueLen)
+	}
+}
+
+// TestDequeueOrder verifies FIFO pop order.
+func TestDequeueOrder(t *testing.T) {
+	s := &PlayerState{cooldowns: make(map[string]int)}
+	s.queueAttack(StateAttackFist)
+	s.queueAttack(StateAttackLeg)
+	s.queueAttack(StateAttackUppercut)
+
+	order := []string{StateAttackFist, StateAttackLeg, StateAttackUppercut}
+	for _, want := range order {
+		got := s.dequeueAttack()
+		if got != want {
+			t.Errorf("dequeue: want %s, got %s", want, got)
+		}
+	}
+	if s.dequeueAttack() != "" {
+		t.Error("empty queue should return empty string")
 	}
 }

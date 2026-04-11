@@ -181,7 +181,7 @@ initNetwork({
 // ── Boot ───────────────────────────────────────────────────────────────────────
 
 (async () => {
-  await initBgGif();
+  initBgGif();          // fire-and-forget — does not block UI
   await checkAuth();
   // Open spectate socket and start rendering the live match on the menu canvas.
   startSpectating();

@@ -40,6 +40,10 @@ body {
   width: 100%;
 }
 
+#game-screen {
+  align-items: center;
+}
+
 .hidden { display: none !important; }
 
 /* ── Title ────────────────────────────────────────────────── */
@@ -896,7 +900,7 @@ body {
 
 /* ── Controls bar (in-game, below canvas) ─────────────────── */
 #controls-bar {
-  display: flex;
+  display: none;
   align-items: center;
   gap: 10px;
   padding: 8px 20px;

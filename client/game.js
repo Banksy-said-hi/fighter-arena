@@ -32,6 +32,7 @@
       dodge: false,
       shoot: false
     },
+    attackBuf: [],
     previewMode: false,
     previewBotTick: 0,
     previewAttackTimer: 0,
@@ -334,7 +335,12 @@
   function sendInput() {
     const { ws, phase, keys } = state;
     if (ws && ws.readyState === WebSocket.OPEN && phase === "game") {
-      wsSend({ type: "input", keys });
+      if (state.attackBuf.length > 0) {
+        const ab = state.attackBuf.splice(0);
+        wsSend({ type: "input", keys, ab });
+      } else {
+        wsSend({ type: "input", keys });
+      }
     }
   }
   var spectateIdleTimer = null;
@@ -469,7 +475,7 @@
   }
   function startInputLoop() {
     stopInputLoop();
-    state.inputInterval = setInterval(() => sendInput(), 1e3 / 30);
+    state.inputInterval = setInterval(() => sendInput(), 1e3 / 60);
   }
   function stopInputLoop() {
     if (state.inputInterval !== null) {
@@ -511,19 +517,28 @@
     e.preventDefault();
     if (!state.keys[action]) {
       state.keys[action] = true;
-      sendInput();
       if (action === "fist") {
+        state.attackBuf.push("attack_fist");
         tryPredictAttack("attack_fist");
         playSound("fist");
       }
       if (action === "leg") {
+        state.attackBuf.push("attack_leg");
         tryPredictAttack("attack_leg");
         playSound("leg");
       }
       if (action === "uppercut") {
+        state.attackBuf.push("attack_uppercut");
         tryPredictAttack("attack_uppercut");
         playSound("uppercut");
       }
+      if (action === "dodge") {
+        state.attackBuf.push("dodge");
+      }
+      if (action === "jump") {
+        state.attackBuf.push("jump");
+      }
+      sendInput();
     }
   });
   document.addEventListener("keyup", (e) => {
@@ -593,7 +608,7 @@
   function hideBgCanvas() {
     bgCanvas.style.display = "none";
   }
-  async function initBgGif() {
+  function initBgGif() {
     bgCanvas.width = window.innerWidth;
     bgCanvas.height = window.innerHeight;
     window.addEventListener("resize", () => {
@@ -602,34 +617,31 @@
     });
     const bgImg = new Image();
     bgImg.src = "assets/background.gif";
-    await new Promise((resolve) => {
-      bgImg.onload = () => resolve();
-      bgImg.onerror = () => resolve();
-    });
-    let durationMs = 0;
-    try {
-      const buf = await fetch("assets/background.gif").then((r) => r.arrayBuffer());
-      const data = new Uint8Array(buf);
-      for (let i = 0; i < data.length - 5; i++) {
-        if (data[i] === 33 && data[i + 1] === 249 && data[i + 2] === 4) {
-          durationMs += (data[i + 4] | data[i + 5] << 8 || 10) * 10;
-          i += 7;
+    bgImg.onload = () => {
+      state.bgAnimating = true;
+      showBgCanvas();
+      (function drawFrame() {
+        if (!state.bgAnimating) return;
+        bgCtx.drawImage(bgImg, 0, 0, bgCanvas.width, bgCanvas.height);
+        bgCtx.fillStyle = "rgba(13,0,26,0.55)";
+        bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+        requestAnimationFrame(drawFrame);
+      })();
+      fetch("assets/background.gif").then((r) => r.arrayBuffer()).then((buf) => {
+        const data = new Uint8Array(buf);
+        let durationMs = 0;
+        for (let i = 0; i < data.length - 5; i++) {
+          if (data[i] === 33 && data[i + 1] === 249 && data[i + 2] === 4) {
+            durationMs += (data[i + 4] | data[i + 5] << 8 || 10) * 10;
+            i += 7;
+          }
         }
-      }
-    } catch (_) {
-    }
-    state.bgAnimating = true;
-    showBgCanvas();
-    (function drawFrame() {
-      if (!state.bgAnimating) return;
-      bgCtx.drawImage(bgImg, 0, 0, bgCanvas.width, bgCanvas.height);
-      bgCtx.fillStyle = "rgba(13,0,26,0.55)";
-      bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
-      requestAnimationFrame(drawFrame);
-    })();
-    if (durationMs > 0) setTimeout(() => {
-      state.bgAnimating = false;
-    }, durationMs);
+        if (durationMs > 0) setTimeout(() => {
+          state.bgAnimating = false;
+        }, durationMs);
+      }).catch(() => {
+      });
+    };
   }
   function drawBackground() {
     const g = ctx.createLinearGradient(0, 0, 0, GROUND_Y);
@@ -1859,7 +1871,7 @@
     }
   });
   (async () => {
-    await initBgGif();
+    initBgGif();
     await checkAuth();
     startSpectating();
     startSpectateLoop();

@@ -101,6 +101,29 @@ type PlayerState struct {
 	actionTimer     int
 	cooldowns       map[string]int
 	dodgeInvincible bool
+	attackQueue    [3]string // FIFO — max 3 slots (one per attack type)
+	attackQueueLen int
+}
+
+// queueAttack appends an attack to the FIFO. Drops silently when full (3 slots
+// covers all distinct attack types so this only happens on held keys).
+func (s *PlayerState) queueAttack(a string) {
+	if s.attackQueueLen < 3 {
+		s.attackQueue[s.attackQueueLen] = a
+		s.attackQueueLen++
+	}
+}
+
+// dequeueAttack pops and returns the oldest queued attack, or "" if empty.
+func (s *PlayerState) dequeueAttack() string {
+	if s.attackQueueLen == 0 {
+		return ""
+	}
+	a := s.attackQueue[0]
+	copy(s.attackQueue[:], s.attackQueue[1:])
+	s.attackQueue[s.attackQueueLen-1] = ""
+	s.attackQueueLen--
+	return a
 }
 
 type GameSnapshot struct {
@@ -127,6 +150,7 @@ type Match struct {
 	powerUpSeq   int
 	spawnTimer   int
 	projectiles  []*Projectile
+	prevKeys     [2]Keys       // previous tick key state for edge detection
 	projSeq      int
 }
 
@@ -234,15 +258,30 @@ func (m *Match) Run() {
 
 func (m *Match) update() {
 	inputs := [2]Keys{}
+	dodgeEvent := [2]bool{}
+	jumpEvent := [2]bool{}
 	for i, p := range m.players {
 		p.mu.Lock()
 		inputs[i] = p.Keys
+		// Drain events: attacks go to the attack queue, dodge/jump set one-shot flags.
+		for _, ev := range p.attackEvents {
+			switch ev {
+			case "dodge":
+				dodgeEvent[i] = true
+			case "jump":
+				jumpEvent[i] = true
+			default:
+				m.states[i].queueAttack(ev)
+			}
+		}
+		p.attackEvents = p.attackEvents[:0]
 		p.mu.Unlock()
 	}
 
 	for i := 0; i < 2; i++ {
-		m.updatePlayer(i, inputs[i])
+		m.updatePlayer(i, inputs[i], m.prevKeys[i], dodgeEvent[i], jumpEvent[i])
 	}
+	m.prevKeys = inputs
 
 	// Power-up spawning
 	m.spawnTimer--
@@ -348,7 +387,7 @@ func (m *Match) update() {
 			opp.vy = -3.2
 			if opp.State != StateBlocking {
 				opp.State = StateHurt
-				opp.actionTimer = 36 // 0.6s at 60fps
+				opp.actionTimer = 9 // 0.15s at 60fps
 			}
 		}
 
@@ -417,7 +456,7 @@ func (m *Match) update() {
 	m.resolveOverlap()
 }
 
-func (m *Match) updatePlayer(idx int, keys Keys) {
+func (m *Match) updatePlayer(idx int, keys Keys, prevKeys Keys, dodgeEvent bool, jumpEvent bool) {
 	s := m.states[idx]
 
 	// Tick timers
@@ -484,19 +523,42 @@ func (m *Match) updatePlayer(idx int, keys Keys) {
 	// --- Attacking ---
 	if s.State == StateAttackFist || s.State == StateAttackLeg || s.State == StateAttackUppercut {
 		applyGravity(s)
-		s.vx *= 0.90 // ≈ 0.80^(1/2)
+		s.vx *= 0.90
 		s.X += s.vx
 		clampX(s)
 
-		// Keep attack box tracking player
 		if s.AttackActive && s.AttackBox != nil {
 			updateAttackBoxPos(s)
+		}
+
+		// Edge-detect newly pressed attacks and enqueue each independently.
+		// Using if/if/if (not else-if) so all three can queue in the same tick.
+		if keys.Uppercut && !prevKeys.Uppercut && s.cooldowns["uppercut"] <= 0 {
+			s.queueAttack(StateAttackUppercut)
+		}
+		if keys.Leg && !prevKeys.Leg && s.cooldowns["leg"] <= 0 {
+			s.queueAttack(StateAttackLeg)
+		}
+		if keys.Fist && !prevKeys.Fist && s.cooldowns["fist"] <= 0 {
+			s.queueAttack(StateAttackFist)
+		}
+
+		// Chain immediately if the hit already connected — no need to wait for timer.
+		if !s.AttackActive {
+			if next := s.dequeueAttack(); next != "" {
+				startAttack(s, next)
+				return
+			}
 		}
 
 		if s.actionTimer <= 0 {
 			s.State = StateIdle
 			s.AttackActive = false
 			s.AttackBox = nil
+			// Fire next queued attack on the same tick the animation finishes.
+			if next := s.dequeueAttack(); next != "" {
+				startAttack(s, next)
+			}
 		}
 		return
 	}
@@ -520,8 +582,8 @@ func (m *Match) updatePlayer(idx int, keys Keys) {
 		return
 	}
 
-	// Dodge
-	if keys.Dodge && s.cooldowns["dodge"] <= 0 {
+	// Dodge (event-driven: triggered by a keydown event, not held key state)
+	if dodgeEvent && s.cooldowns["dodge"] <= 0 {
 		opp := m.states[1-idx]
 		dashDir := -float64(s.Facing) // dash away from opponent
 		if opp.X+PlayerW/2 > s.X+PlayerW/2 {
@@ -587,8 +649,8 @@ func (m *Match) updatePlayer(idx int, keys Keys) {
 		}
 	}
 
-	// Jump
-	if keys.Jump && onGround {
+	// Jump (event-driven: triggered by a keydown event, not held key state)
+	if jumpEvent && onGround {
 		s.vy = JumpVel
 	}
 
@@ -615,13 +677,13 @@ func startAttack(s *PlayerState, attackState string) {
 	// Durations and cooldowns doubled (ticks) — same real-world seconds at 60fps
 	switch attackState {
 	case StateAttackFist:
-		duration, cooldown = 36, 56
+		duration, cooldown = 9, 56
 		aw, ah, ayOffset = 36, 21, 12
 	case StateAttackLeg:
-		duration, cooldown = 44, 76
+		duration, cooldown = 11, 76
 		aw, ah, ayOffset = 42, 27, 21
 	case StateAttackUppercut:
-		duration, cooldown = 56, 110
+		duration, cooldown = 14, 110
 		aw, ah, ayOffset = 30, 36, -3
 		s.vy = -4.0 // small hop
 	}

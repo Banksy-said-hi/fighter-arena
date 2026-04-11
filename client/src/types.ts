@@ -101,6 +101,7 @@ export type PlayerStateName =
   | 'ko';
 
 export type AttackStateName = 'attack_fist' | 'attack_leg' | 'attack_uppercut';
+export type ActionEventName = AttackStateName | 'dodge' | 'jump';
 
 /** Maps to the cooldown key stored in server/state cooldown maps */
 export type AttackKey = 'fist' | 'leg' | 'uppercut';
@@ -171,7 +172,7 @@ export interface SpectateMatchInfo {
 export type ClientMessage =
   | { type: 'join_spectate'; name?: string }
   | { type: 'join_queue';    name: string }
-  | { type: 'input';         keys: Keys };
+  | { type: 'input';         keys: Keys; ab?: ActionEventName[] };
 
 // ── Audio ──────────────────────────────────────────────────────────────────────
 

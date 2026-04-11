@@ -25,7 +25,7 @@ export const spectateCtx    = spectateCanvas.getContext('2d')!;
 export function showBgCanvas(): void { bgCanvas.style.display = 'block'; }
 export function hideBgCanvas(): void { bgCanvas.style.display = 'none'; }
 
-export async function initBgGif(): Promise<void> {
+export function initBgGif(): void {
   bgCanvas.width  = window.innerWidth;
   bgCanvas.height = window.innerHeight;
   window.addEventListener('resize', () => {
@@ -35,33 +35,35 @@ export async function initBgGif(): Promise<void> {
 
   const bgImg = new Image();
   bgImg.src = 'assets/background.gif';
-  await new Promise<void>(resolve => { bgImg.onload = () => resolve(); bgImg.onerror = () => resolve(); });
 
-  // Parse GIF binary to sum frame delays → total animation duration
-  let durationMs = 0;
-  try {
-    const buf  = await fetch('assets/background.gif').then(r => r.arrayBuffer());
-    const data = new Uint8Array(buf);
-    for (let i = 0; i < data.length - 5; i++) {
-      if (data[i] === 0x21 && data[i + 1] === 0xF9 && data[i + 2] === 0x04) {
-        durationMs += ((data[i + 4] | (data[i + 5] << 8)) || 10) * 10; // centiseconds → ms
-        i += 7;
-      }
-    }
-  } catch (_) { /* best-effort */ }
+  bgImg.onload = () => {
+    state.bgAnimating = true;
+    showBgCanvas();
 
-  state.bgAnimating = true;
-  showBgCanvas();
+    (function drawFrame() {
+      if (!state.bgAnimating) return;
+      bgCtx.drawImage(bgImg, 0, 0, bgCanvas.width, bgCanvas.height);
+      bgCtx.fillStyle = 'rgba(13,0,26,0.55)';
+      bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
+      requestAnimationFrame(drawFrame);
+    })();
 
-  (function drawFrame() {
-    if (!state.bgAnimating) return;
-    bgCtx.drawImage(bgImg, 0, 0, bgCanvas.width, bgCanvas.height);
-    bgCtx.fillStyle = 'rgba(13,0,26,0.55)';
-    bgCtx.fillRect(0, 0, bgCanvas.width, bgCanvas.height);
-    requestAnimationFrame(drawFrame);
-  })();
-
-  if (durationMs > 0) setTimeout(() => { state.bgAnimating = false; }, durationMs);
+    // Parse GIF frame delays in the background to know when to stop animating
+    fetch('assets/background.gif')
+      .then(r => r.arrayBuffer())
+      .then(buf => {
+        const data = new Uint8Array(buf);
+        let durationMs = 0;
+        for (let i = 0; i < data.length - 5; i++) {
+          if (data[i] === 0x21 && data[i + 1] === 0xF9 && data[i + 2] === 0x04) {
+            durationMs += ((data[i + 4] | (data[i + 5] << 8)) || 10) * 10;
+            i += 7;
+          }
+        }
+        if (durationMs > 0) setTimeout(() => { state.bgAnimating = false; }, durationMs);
+      })
+      .catch(() => { /* best-effort */ });
+  };
 }
 
 // ── Background & ground ────────────────────────────────────────────────────────
